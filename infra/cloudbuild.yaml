@@ -1,0 +1,32 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -t
+      - gcr.io/$PROJECT_ID/ai-finops-platform:$COMMIT_SHA
+      - -f
+      - infra/Dockerfile
+      - .
+
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - gcr.io/$PROJECT_ID/ai-finops-platform:$COMMIT_SHA
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - ai-finops-platform
+      - --image=gcr.io/$PROJECT_ID/ai-finops-platform:$COMMIT_SHA
+      - --region=us-central1
+      - --platform=managed
+      - --allow-unauthenticated
+      - --set-env-vars=MOCK_LLM=true
+
+images:
+  - gcr.io/$PROJECT_ID/ai-finops-platform:$COMMIT_SHA
+
+options:
+  logging: CLOUD_LOGGING_ONLY
