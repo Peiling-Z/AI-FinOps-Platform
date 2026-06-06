@@ -84,8 +84,8 @@ Example ROI output from a pipeline run:
 ### 1. Clone & Install
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/ai-finops-platform.git
-cd ai-finops-platform
+git clone https://github.com/Peiling-Z/AI-FinOps-Platform.git
+cd AI-FinOps-Platform
 python -m venv .venv
 source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
@@ -152,7 +152,7 @@ curl http://localhost:8000/ingest/plaid/mock
 ## Project Structure
 
 ```
-ai-finops-platform/
+AI-FinOps-Platform/
 ├── backend/
 │   ├── agents/           # LangGraph orchestrator + 5 specialized agents
 │   ├── router/           # Model router + cost/ROI tracker
