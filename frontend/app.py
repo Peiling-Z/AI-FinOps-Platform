@@ -28,6 +28,7 @@ with tab_analyze:
             resp = requests.post(f"{API_BASE}/analyze", json={"text": text, "source": "dashboard"}, timeout=120)
         if resp.ok:
             data = resp.json()
+            st.session_state["last_cost_summary"] = data.get("cost_summary", {})
             st.success(f"Status: {data['status']}")
             col1, col2 = st.columns(2)
             with col1:
@@ -59,7 +60,20 @@ with tab_costs:
     rules = requests.get(f"{API_BASE}/router/rules", timeout=10)
     if rules.ok:
         st.table([{"Task": k, "Model": v} for k, v in rules.json().items()])
+
     st.subheader("Live Cost Tracker")
     costs = requests.get(f"{API_BASE}/router/costs", timeout=10)
-    if costs.ok:
-        st.json(costs.json())
+    summary = costs.json() if costs.ok else {}
+
+    if summary.get("total_calls", 0) == 0:
+        st.info("No pipeline runs yet. Go to **Analyze Text** and click **Run Pipeline** first.")
+        if "last_cost_summary" in st.session_state:
+            st.caption("Showing cost data from your last run in this session:")
+            summary = st.session_state["last_cost_summary"]
+    else:
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Total Calls", summary.get("total_calls", 0))
+        col2.metric("Total LLM Cost", f"${summary.get('total_cost_usd', 0):.4f}")
+        col3.metric("Aggregate ROI", summary.get("aggregate_roi", "N/A"))
+
+    st.json(summary)

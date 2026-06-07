@@ -124,9 +124,13 @@ def build_finops_graph(router: ModelRouter | None = None) -> StateGraph:
     return graph
 
 
-def run_pipeline(raw_input: str, source: str = "manual") -> dict[str, Any]:
+def run_pipeline(
+    raw_input: str,
+    source: str = "manual",
+    router: ModelRouter | None = None,
+) -> dict[str, Any]:
     """Execute the full agent pipeline and return final state."""
-    graph = build_finops_graph().compile()
+    graph = build_finops_graph(router).compile()
     initial: FinOpsState = {
         "raw_input": raw_input,
         "source": source,

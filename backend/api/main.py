@@ -14,7 +14,7 @@ from backend.config import get_settings
 from backend.ingestion.csv_loader import load_csv_string
 from backend.ingestion.pdf_parser import extract_text_from_bytes
 from backend.ingestion.plaid_client import PlaidClient
-from backend.router.model_router import ModelRouter, RoutingRules, TaskType
+from backend.router.model_router import ModelRouter, RoutingRules, TaskType, get_shared_router
 
 app = FastAPI(
     title="AI FinOps Platform",
@@ -63,12 +63,20 @@ def routing_rules() -> dict[str, str]:
 
 @app.get("/router/costs")
 def cost_summary() -> dict[str, Any]:
-    return ModelRouter().summary()
+    return get_shared_router().summary()
+
+
+@app.post("/router/costs/reset")
+def reset_costs() -> dict[str, str]:
+    from backend.router.model_router import reset_shared_router
+
+    reset_shared_router()
+    return {"status": "reset"}
 
 
 @app.post("/analyze", response_model=AnalyzeResponse)
 def analyze(request: AnalyzeRequest) -> AnalyzeResponse:
-    state = run_pipeline(request.text, source=request.source)
+    state = run_pipeline(request.text, source=request.source, router=get_shared_router())
     return AnalyzeResponse(
         status="completed" if not state.get("errors") else "completed_with_errors",
         recommendation=state.get("recommendation_result", {}),
@@ -89,7 +97,7 @@ async def ingest_pdf(file: UploadFile = File(...)) -> dict[str, Any]:
         text = extract_text_from_bytes(content)
     except Exception as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    state = run_pipeline(text, source=f"pdf:{file.filename}")
+    state = run_pipeline(text, source=f"pdf:{file.filename}", router=get_shared_router())
     return {"filename": file.filename, "extracted_chars": len(text), "pipeline": state}
 
 
@@ -103,7 +111,7 @@ async def ingest_csv(file: UploadFile = File(...)) -> dict[str, Any]:
     except Exception as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     text = json.dumps({"transactions": transactions}, indent=2)
-    state = run_pipeline(text, source=f"csv:{file.filename}")
+    state = run_pipeline(text, source=f"csv:{file.filename}", router=get_shared_router())
     return {"filename": file.filename, "transaction_count": len(transactions), "pipeline": state}
 
 
@@ -112,12 +120,12 @@ def ingest_plaid_mock() -> dict[str, Any]:
     client = PlaidClient()
     transactions = client.fetch_mock_as_list()
     text = json.dumps({"transactions": transactions, "source": "plaid_mock"}, indent=2)
-    state = run_pipeline(text, source="plaid:sandbox")
+    state = run_pipeline(text, source="plaid:sandbox", router=get_shared_router())
     return {"transaction_count": len(transactions), "pipeline": state}
 
 
 @app.post("/agents/{task_type}")
 def run_single_agent(task_type: TaskType, request: AnalyzeRequest) -> dict[str, Any]:
-    router = ModelRouter()
+    router = get_shared_router()
     result = router.invoke(task_type, request.text)
     return {"task_type": task_type.value, "result": result}

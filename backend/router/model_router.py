@@ -186,3 +186,21 @@ class ModelRouter:
 
     def summary(self) -> dict[str, Any]:
         return self.cost_tracker.summary()
+
+
+# Process-level singleton — accumulates costs across API requests
+_shared_router: ModelRouter | None = None
+
+
+def get_shared_router() -> ModelRouter:
+    """Return the API-scoped router so /router/costs reflects pipeline runs."""
+    global _shared_router
+    if _shared_router is None:
+        _shared_router = ModelRouter()
+    return _shared_router
+
+
+def reset_shared_router() -> None:
+    """Reset accumulated costs (useful for tests)."""
+    global _shared_router
+    _shared_router = None
