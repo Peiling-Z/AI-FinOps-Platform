@@ -1,15 +1,20 @@
 """Tests for model router and cost tracker."""
 
-import pytest
-
+from backend.config import Settings
 from backend.router.cost_tracker import CostTracker
 from backend.router.model_router import ModelRouter, RoutingRules, TaskType
 
 
-def test_routing_rules():
-    assert RoutingRules.resolve(TaskType.DOCUMENT_PARSE) == "gemini-1.5-flash"
-    assert RoutingRules.resolve(TaskType.DEEP_ANALYSIS) == "gpt-4o"
-    assert RoutingRules.resolve(TaskType.RECOMMENDATION) == "claude-3-5-sonnet"
+def test_routing_rules_multi():
+    assert RoutingRules.resolve(TaskType.DOCUMENT_PARSE, "multi") == "gemini-1.5-flash"
+    assert RoutingRules.resolve(TaskType.DEEP_ANALYSIS, "multi") == "gpt-4o"
+    assert RoutingRules.resolve(TaskType.RECOMMENDATION, "multi") == "claude-3-5-sonnet"
+
+
+def test_routing_rules_vertex():
+    assert RoutingRules.resolve(TaskType.DOCUMENT_PARSE, "vertex") == "gemini-2.0-flash-lite"
+    assert RoutingRules.resolve(TaskType.DEEP_ANALYSIS, "vertex") == "gemini-1.5-pro"
+    assert RoutingRules.resolve(TaskType.RECOMMENDATION, "vertex") == "gemini-1.5-pro"
 
 
 def test_cost_tracker_roi():
@@ -26,10 +31,10 @@ def test_cost_tracker_roi():
     assert record.roi > 0
 
 
-def test_model_router_mock_invoke():
-    router = ModelRouter()
+def test_model_router_mock_invoke_vertex():
+    settings = Settings(mock_llm=True, llm_provider="vertex")
+    router = ModelRouter(settings=settings)
     result = router.invoke(TaskType.DOCUMENT_PARSE, "Sample bank statement text")
     assert "content" in result
-    assert result["model"] == "gemini-1.5-flash"
-    summary = router.summary()
-    assert summary["total_calls"] >= 1
+    assert result["model"] == "gemini-2.0-flash-lite"
+    assert router.summary()["total_calls"] >= 1

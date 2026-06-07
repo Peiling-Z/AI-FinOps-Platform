@@ -9,5 +9,7 @@ def test_full_pipeline_mock():
     state = run_pipeline(sample, source="test")
     assert "recommendation_result" in state
     assert "cost_summary" in state
+    assert "pipeline_run_id" in state
+    assert state["pipeline_run_id"]
     eval_result = run_eval_suite(state)
     assert eval_result["overall_score"] >= 0.5

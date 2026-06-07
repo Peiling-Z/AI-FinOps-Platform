@@ -112,16 +112,98 @@ streamlit run frontend/app.py
 pytest -v
 ```
 
-### 5. Enable Live LLMs
+### 5. Enable Live LLMs (Vertex AI + LangSmith)
 
-Edit `.env`:
+**Step 1 — GCP setup**
+
+```bash
+# Authenticate (pick one)
+gcloud auth application-default login
+# OR set a service account key path:
+# GOOGLE_APPLICATION_CREDENTIALS=C:\path\to\service-account.json
+
+# Enable Vertex AI API in your GCP project
+gcloud services enable aiplatform.googleapis.com --project=YOUR_GCP_PROJECT
+```
+
+**Step 2 — Configure `.env`**
 
 ```env
 MOCK_LLM=false
+LLM_PROVIDER=vertex
+VERTEX_AI_PROJECT=your-gcp-project
+VERTEX_AI_LOCATION=us-central1
+GOOGLE_APPLICATION_CREDENTIALS=C:\path\to\service-account.json
+
+# LangSmith tracing
+LANGCHAIN_TRACING_V2=true
+LANGCHAIN_API_KEY=lsv2_...
+LANGCHAIN_PROJECT=ai-finops-platform
+```
+
+**Step 3 — Verify**
+
+```bash
+curl http://localhost:8000/health
+curl http://localhost:8000/observability/status
+curl -X POST http://localhost:8000/evaluate \
+  -H "Content-Type: application/json" \
+  -d '{"text": "05/01 Whole Foods -127.43", "source": "manual"}'
+```
+
+Open [LangSmith](https://smith.langchain.com) → project `ai-finops-platform` to view traces tagged by `task_type`.
+
+**Multi-provider mode** (optional — routes across Gemini, Claude, GPT):
+
+```env
+LLM_PROVIDER=multi
 OPENAI_API_KEY=sk-...
 ANTHROPIC_API_KEY=sk-ant-...
 VERTEX_AI_PROJECT=your-gcp-project
 ```
+
+---
+
+### 6. BigQuery Cost Sink (LLM FinOps Analytics)
+
+Every LLM call is streamed to BigQuery for token spend analysis, ROI tracking, and anomaly detection.
+
+**Enable in `.env`:**
+
+```env
+BIGQUERY_ENABLED=true
+BIGQUERY_PROJECT=your-gcp-project
+BIGQUERY_DATASET=finops_analytics
+BIGQUERY_TABLE=llm_usage
+GOOGLE_APPLICATION_CREDENTIALS=C:\path\to\service-account.json
+```
+
+**Setup (one-time):**
+
+```bash
+gcloud services enable bigquery.googleapis.com --project=YOUR_GCP_PROJECT
+# Optional manual schema — or let the app auto-create on first pipeline run
+# See infra/bigquery/schema.sql
+```
+
+**Verify:**
+
+```bash
+curl http://localhost:8000/analytics/bigquery/status
+# Run a pipeline, then query BigQuery:
+# See sample queries in infra/bigquery/queries.sql
+```
+
+**What gets stored per LLM call:**
+
+| Column | Description |
+|--------|-------------|
+| `task_type` | document_parse, deep_analysis, etc. |
+| `model` | gemini-2.0-flash-lite, gemini-1.5-pro, ... |
+| `input_tokens` / `output_tokens` | Token economy metrics |
+| `cost_usd` | Computed from model pricing table |
+| `pipeline_run_id` | Groups 6 calls from one pipeline run |
+| `roi` | estimated_savings / cost |
 
 ---
 
@@ -202,7 +284,8 @@ terraform apply -var="project_id=YOUR_PROJECT"
 - [ ] Weaviate vector store for semantic transaction search
 - [ ] Real Plaid Link OAuth integration
 - [ ] LangSmith eval datasets for regression testing
-- [ ] BigQuery analytics for LLM cost optimization
+- [x] BigQuery sink for LLM cost analytics
+- [ ] Cloud Run production deployment
 
 ---
 

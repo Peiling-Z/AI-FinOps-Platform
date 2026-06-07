@@ -2,11 +2,18 @@
 
 from __future__ import annotations
 
+import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
+logger = logging.getLogger(__name__)
+
 # Per-million-token pricing (USD) — update as providers change rates
 MODEL_PRICING: dict[str, dict[str, float]] = {
+    "gemini-2.0-flash-lite": {"input": 0.075, "output": 0.30},
+    "gemini-2.0-flash": {"input": 0.15, "output": 0.60},
+    "gemini-1.5-pro": {"input": 1.25, "output": 5.00},
     "gemini-1.5-flash": {"input": 0.075, "output": 0.30},
     "claude-3-5-haiku": {"input": 0.80, "output": 4.00},
     "gpt-4o": {"input": 2.50, "output": 10.00},
@@ -43,8 +50,9 @@ class UsageRecord:
 class CostTracker:
     """Accumulates per-call usage and computes aggregate ROI."""
 
-    def __init__(self) -> None:
+    def __init__(self, on_record: Callable[[UsageRecord], None] | None = None) -> None:
         self.records: list[UsageRecord] = []
+        self.on_record = on_record
 
     @staticmethod
     def compute_cost(model: str, input_tokens: int, output_tokens: int) -> float:
@@ -80,6 +88,11 @@ class CostTracker:
             roi=roi,
         )
         self.records.append(record)
+        if self.on_record:
+            try:
+                self.on_record(record)
+            except Exception as exc:  # noqa: BLE001 — sink failures must not break LLM calls
+                logger.warning("Cost record sink failed: %s", exc)
         return record
 
     def summary(self) -> dict:

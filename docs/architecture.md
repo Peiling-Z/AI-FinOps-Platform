@@ -36,13 +36,15 @@ AI FinOps Platform is a **multi-agent household finance system** that ingests da
 
 ## Agent Responsibilities
 
-| Agent | Task Type | Default Model | Purpose |
-|-------|-----------|---------------|---------|
-| Document | `document_parse` | gemini-1.5-flash | Parse PDF/CSV, classify, extract transactions |
-| Analysis | `anomaly_detection`, `deep_analysis` | haiku / gpt-4o | Trends, anomalies, risk scoring |
-| Optimization | `recommendation` | claude-3-5-sonnet | Savings opportunities |
-| Compliance | `compliance_check` | claude-3-5-haiku | FSA/HSA flags, deduction hints |
-| Recommendation | `recommendation` | claude-3-5-sonnet | Prioritized action plan |
+| Agent | Task Type | Vertex Model | Multi-Provider Model | Purpose |
+|-------|-----------|--------------|----------------------|---------|
+| Document | `document_parse` | gemini-2.0-flash-lite | gemini-1.5-flash | Parse PDF/CSV, classify, extract transactions |
+| Analysis | `anomaly_detection`, `deep_analysis` | gemini-2.0-flash / gemini-1.5-pro | haiku / gpt-4o | Trends, anomalies, risk scoring |
+| Optimization | `recommendation` | gemini-1.5-pro | claude-3-5-sonnet | Savings opportunities |
+| Compliance | `compliance_check` | gemini-2.0-flash | claude-3-5-haiku | FSA/HSA flags, deduction hints |
+| Recommendation | `recommendation` | gemini-1.5-pro | claude-3-5-sonnet | Prioritized action plan |
+
+Set `LLM_PROVIDER=vertex` (default) for all-Gemini routing via Vertex AI, or `LLM_PROVIDER=multi` for cross-provider cost optimization.
 
 ## Model Router — Design Rationale
 
@@ -78,6 +80,22 @@ Linear DAG with error accumulation — each node catches exceptions and appends 
 | POST | `/ingest/pdf` | Upload PDF → pipeline |
 | POST | `/ingest/csv` | Upload CSV → pipeline |
 | GET | `/ingest/plaid/mock` | Sandbox Plaid transactions |
+| GET | `/analytics/bigquery/status` | BigQuery sink configuration |
+
+## BigQuery Cost Sink
+
+Each LLM invocation writes one row to `{project}.finops_analytics.llm_usage`:
+
+```
+ModelRouter.invoke → CostTracker.record → BigQueryCostSink.insert
+                              ↑
+                   pipeline_run_id (LangGraph run context)
+```
+
+- **Partitioned** by `recorded_at` (daily)
+- **Grouped** by `pipeline_run_id` for per-run ROI analysis
+- **Fail-safe** — sink errors are logged, never break the agent pipeline
+- **Sample queries** — `infra/bigquery/queries.sql`
 
 ## Deployment (GCP)
 
@@ -85,6 +103,7 @@ Linear DAG with error accumulation — each node catches exceptions and appends 
 - **Cloud Build** — CI/CD via `infra/cloudbuild.yaml`
 - **Terraform** — IaC in `infra/terraform/`
 - **Vertex AI** — Production LLM provider (Gemini)
+- **BigQuery** — LLM cost / token analytics warehouse
 
 ## Roadmap
 
@@ -92,4 +111,5 @@ Linear DAG with error accumulation — each node catches exceptions and appends 
 - [ ] Weaviate/Pinecone for transaction embedding & semantic search
 - [ ] Real Plaid Link OAuth flow
 - [ ] LangSmith eval datasets for agent quality regression
-- [ ] BigQuery sink for cost analytics dashboard
+- [x] BigQuery sink for cost analytics
+- [ ] BigQuery Looker Studio dashboard

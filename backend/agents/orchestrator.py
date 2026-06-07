@@ -12,6 +12,7 @@ from backend.agents.compliance_agent import ComplianceAgent
 from backend.agents.document_agent import DocumentAgent
 from backend.agents.optimization_agent import OptimizationAgent
 from backend.agents.recommendation_agent import RecommendationAgent
+from backend.analytics.pipeline_context import pipeline_run
 from backend.router.model_router import ModelRouter
 
 
@@ -142,5 +143,7 @@ def run_pipeline(
         "errors": [],
         "cost_summary": {},
     }
-    final_state = graph.invoke(initial)
+    with pipeline_run() as run_id:
+        final_state = graph.invoke(initial)
+    final_state["pipeline_run_id"] = run_id
     return final_state

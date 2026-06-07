@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import logging
+from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
@@ -11,15 +13,33 @@ from pydantic import BaseModel, Field
 
 from backend.agents.orchestrator import run_pipeline
 from backend.config import get_settings
+from backend.evaluation.agent_eval import run_eval_suite
 from backend.ingestion.csv_loader import load_csv_string
 from backend.ingestion.pdf_parser import extract_text_from_bytes
 from backend.ingestion.plaid_client import PlaidClient
-from backend.router.model_router import ModelRouter, RoutingRules, TaskType, get_shared_router
+from backend.analytics.bigquery_sink import get_bigquery_sink
+from backend.observability.langsmith_setup import configure_langsmith, observability_status
+from backend.router.model_router import RoutingRules, TaskType, get_shared_router
+
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    settings = get_settings()
+    logging.basicConfig(level=settings.log_level)
+    if configure_langsmith(settings):
+        logger.info("LangSmith tracing active — project: %s", settings.langchain_project)
+    else:
+        logger.info("LangSmith tracing inactive")
+    yield
+
 
 app = FastAPI(
     title="AI FinOps Platform",
     description="Multi-agent household finance dashboard with cost-aware model routing",
-    version="0.1.0",
+    version="0.2.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -47,18 +67,36 @@ class AnalyzeResponse(BaseModel):
 
 
 @app.get("/health")
-def health() -> dict[str, str]:
+def health() -> dict[str, Any]:
     settings = get_settings()
     return {
         "status": "ok",
-        "mock_llm": str(settings.mock_llm),
-        "project": "ai-finops-platform",
+        "mock_llm": settings.mock_llm,
+        "live_llm_ready": settings.live_llm_ready,
+        **observability_status(settings),
+        "bigquery_sink": get_bigquery_sink(settings).status(),
     }
+
+
+@app.get("/observability/status")
+def observability() -> dict[str, Any]:
+    settings = get_settings()
+    return {
+        **observability_status(settings),
+        "routing_rules": RoutingRules.active_rules(settings.llm_provider),
+        "bigquery_sink": get_bigquery_sink(settings).status(),
+    }
+
+
+@app.get("/analytics/bigquery/status")
+def bigquery_status() -> dict[str, Any]:
+    return get_bigquery_sink().status()
 
 
 @app.get("/router/rules")
 def routing_rules() -> dict[str, str]:
-    return {k.value: v for k, v in RoutingRules.RULES.items()}
+    settings = get_settings()
+    return RoutingRules.active_rules(settings.llm_provider)
 
 
 @app.get("/router/costs")
@@ -86,6 +124,18 @@ def analyze(request: AnalyzeRequest) -> AnalyzeResponse:
         cost_summary=state.get("cost_summary", {}),
         errors=state.get("errors", []),
     )
+
+
+@app.post("/evaluate")
+def evaluate_pipeline(request: AnalyzeRequest) -> dict[str, Any]:
+    """Run pipeline and return LangSmith-aware eval scores."""
+    state = run_pipeline(request.text, source=request.source, router=get_shared_router())
+    return {
+        "pipeline_status": "completed" if not state.get("errors") else "completed_with_errors",
+        "eval": run_eval_suite(state),
+        "cost_summary": state.get("cost_summary", {}),
+        "errors": state.get("errors", []),
+    }
 
 
 @app.post("/ingest/pdf")

@@ -2,21 +2,9 @@
 
 from __future__ import annotations
 
-import os
 from typing import Any
 
-from backend.config import get_settings
-
-
-def configure_langsmith() -> bool:
-    """Enable LangSmith tracing if credentials are present."""
-    settings = get_settings()
-    if not settings.langchain_api_key:
-        return False
-    os.environ["LANGCHAIN_TRACING_V2"] = str(settings.langchain_tracing_v2).lower()
-    os.environ["LANGCHAIN_API_KEY"] = settings.langchain_api_key
-    os.environ["LANGCHAIN_PROJECT"] = settings.langchain_project
-    return True
+from backend.observability.langsmith_setup import configure_langsmith, observability_status
 
 
 def evaluate_output(expected_keys: list[str], output: dict[str, Any]) -> dict[str, Any]:
@@ -49,5 +37,5 @@ def run_eval_suite(pipeline_result: dict[str, Any]) -> dict[str, Any]:
     return {
         "checks": checks,
         "overall_score": round(sum(scores) / len(scores), 3) if scores else 0.0,
-        "langsmith_enabled": configure_langsmith(),
+        **observability_status(),
     }
