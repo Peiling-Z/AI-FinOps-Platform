@@ -37,11 +37,11 @@ class RoutingRules:
     }
 
     VERTEX: dict[TaskType, str] = {
-        TaskType.DOCUMENT_PARSE: "gemini-2.0-flash-lite",
-        TaskType.ANOMALY_DETECTION: "gemini-2.0-flash",
-        TaskType.DEEP_ANALYSIS: "gemini-1.5-pro",
-        TaskType.RECOMMENDATION: "gemini-1.5-pro",
-        TaskType.COMPLIANCE_CHECK: "gemini-2.0-flash",
+        TaskType.DOCUMENT_PARSE: "gemini-2.5-flash-lite",
+        TaskType.ANOMALY_DETECTION: "gemini-2.5-flash",
+        TaskType.DEEP_ANALYSIS: "gemini-2.5-pro",
+        TaskType.RECOMMENDATION: "gemini-2.5-pro",
+        TaskType.COMPLIANCE_CHECK: "gemini-2.5-flash",
     }
 
     # Backward-compatible alias used in docs/tests

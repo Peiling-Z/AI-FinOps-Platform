@@ -12,9 +12,9 @@ def test_routing_rules_multi():
 
 
 def test_routing_rules_vertex():
-    assert RoutingRules.resolve(TaskType.DOCUMENT_PARSE, "vertex") == "gemini-2.0-flash-lite"
-    assert RoutingRules.resolve(TaskType.DEEP_ANALYSIS, "vertex") == "gemini-1.5-pro"
-    assert RoutingRules.resolve(TaskType.RECOMMENDATION, "vertex") == "gemini-1.5-pro"
+    assert RoutingRules.resolve(TaskType.DOCUMENT_PARSE, "vertex") == "gemini-2.5-flash-lite"
+    assert RoutingRules.resolve(TaskType.DEEP_ANALYSIS, "vertex") == "gemini-2.5-pro"
+    assert RoutingRules.resolve(TaskType.RECOMMENDATION, "vertex") == "gemini-2.5-pro"
 
 
 def test_cost_tracker_roi():
@@ -36,5 +36,5 @@ def test_model_router_mock_invoke_vertex():
     router = ModelRouter(settings=settings)
     result = router.invoke(TaskType.DOCUMENT_PARSE, "Sample bank statement text")
     assert "content" in result
-    assert result["model"] == "gemini-2.0-flash-lite"
+    assert result["model"] == "gemini-2.5-flash-lite"
     assert router.summary()["total_calls"] >= 1
