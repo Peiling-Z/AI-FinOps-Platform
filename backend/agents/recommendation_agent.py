@@ -10,6 +10,13 @@ from backend.router.model_router import ModelRouter, TaskType
 
 
 class RecommendationAgent:
+    """Prioritizes existing findings only.
+
+    Savings are attributed to the optimization agent, so this synthesis step
+    records cost with zero savings to keep pipeline ROI from double counting the
+    same opportunities.
+    """
+
     SYSTEM = (
         "You are a financial advisor synthesizer. Combine analysis, optimization, and "
         "compliance findings into a prioritized action plan with scores 1-5. "
@@ -21,12 +28,10 @@ class RecommendationAgent:
 
     def run(self, agent_outputs: dict[str, Any]) -> dict[str, Any]:
         prompt = f"Synthesize these agent outputs:\n{json.dumps(agent_outputs, indent=2)[:8000]}"
-        savings = self._estimate_total_savings(agent_outputs)
         result = self.router.invoke(
             TaskType.RECOMMENDATION,
             prompt,
             system=self.SYSTEM,
-            estimated_savings_usd=savings,
         )
         try:
             plan = parse_llm_json(result["content"])
@@ -38,9 +43,3 @@ class RecommendationAgent:
             "model": result["model"],
             "usage": result["usage"],
         }
-
-    @staticmethod
-    def _estimate_total_savings(outputs: dict[str, Any]) -> float:
-        opt = outputs.get("optimization", {}).get("recommendations", {})
-        actions = opt.get("actions", [])
-        return sum(float(a.get("estimated_savings", 0)) for a in actions)

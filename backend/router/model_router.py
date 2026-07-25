@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+from collections.abc import Callable
 from enum import StrEnum
 from typing import Any
 
@@ -99,6 +100,7 @@ class ModelRouter:
         system: str | None = None,
         quality_score: float | None = None,
         estimated_savings_usd: float = 0.0,
+        savings_extractor: Callable[[str], float] | None = None,
     ) -> dict[str, Any]:
         model = self.select_model(task_type)
         task_key = TaskType(task_type).value if isinstance(task_type, TaskType) else task_type
@@ -109,6 +111,12 @@ class ModelRouter:
             content, input_tokens, output_tokens = self._live_invoke(
                 model, prompt, system, task_key
             )
+
+        if savings_extractor is not None:
+            try:
+                estimated_savings_usd = savings_extractor(content)
+            except Exception as exc:  # noqa: BLE001 — bad savings math must not fail the call
+                logger.warning("Savings extraction failed for %s: %s", task_key, exc)
 
         record = self.cost_tracker.record(
             task_type=task_key,
@@ -147,10 +155,20 @@ class ModelRouter:
                 "top_categories": ["housing", "groceries", "transport"],
                 "cash_flow": "positive",
             },
+            # Mirrors the field names live Gemini actually returns, so mock runs
+            # exercise the same parsing path as production.
             "recommendation": {
                 "actions": [
-                    {"title": "Switch to high-yield savings", "priority": 1, "estimated_savings": 240},
-                    {"title": "Consolidate streaming subscriptions", "priority": 2, "estimated_savings": 180},
+                    {
+                        "action": "Switch to high-yield savings",
+                        "priority": 1,
+                        "estimated_annual_savings_usd": 240,
+                    },
+                    {
+                        "action": "Consolidate streaming subscriptions",
+                        "priority": 2,
+                        "estimated_annual_savings_usd": 180,
+                    },
                 ],
             },
             "compliance_check": {

@@ -76,7 +76,6 @@ def build_finops_graph(router: ModelRouter | None = None) -> StateGraph:
             profile = {
                 "transactions": _extract_transactions(state.get("document_result", {})),
                 "analysis": state.get("analysis_result", {}).get("analysis", {}),
-                "optimization_potential_usd": 420.0,
             }
             result = optimization_agent.run(profile)
             return {"optimization_result": result}

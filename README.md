@@ -58,16 +58,21 @@ Routes each task to the optimal model — balancing **cost vs. quality**:
 
 Every call records: **model, tokens, cost, quality score, estimated savings → ROI**.
 
-Example ROI output from a pipeline run:
+Savings are derived from the optimization agent's own response and booked exactly
+once per run, so `aggregate_roi` is *total savings found ÷ total LLM spend* rather
+than the same opportunity counted by several agents.
+
+Example ROI output from a live pipeline run:
 
 ```json
 {
-  "total_cost_usd": 0.0042,
-  "total_estimated_savings_usd": 420.0,
-  "aggregate_roi": 100000.0,
+  "total_cost_usd": 0.0212,
+  "total_estimated_savings_usd": 3571.99,
+  "aggregate_roi": 168330.7,
   "by_model": {
-    "gemini-1.5-flash": {"calls": 1, "cost_usd": 0.0001, "tokens": 230},
-    "claude-3-5-sonnet": {"calls": 2, "cost_usd": 0.0038, "tokens": 890}
+    "gemini-2.5-flash-lite": {"calls": 1, "cost_usd": 0.0001, "tokens": 281},
+    "gemini-2.5-flash": {"calls": 2, "cost_usd": 0.001, "tokens": 1922},
+    "gemini-2.5-pro": {"calls": 3, "cost_usd": 0.0201, "tokens": 5872}
   }
 }
 ```
