@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from backend.agents.json_utils import parse_llm_json
 from backend.router.model_router import ModelRouter, TaskType
 
 
@@ -21,7 +22,7 @@ class AnalysisAgent:
         prompt = f"Analyze these transactions:\n{json.dumps(transactions, indent=2)[:6000]}"
         result = self.router.invoke(TaskType.ANOMALY_DETECTION, prompt, system=self.SYSTEM)
         try:
-            analysis = json.loads(result["content"])
+            analysis = parse_llm_json(result["content"])
         except json.JSONDecodeError:
             analysis = {"summary": result["content"]}
         return {
@@ -35,7 +36,7 @@ class AnalysisAgent:
         prompt = f"Perform deep financial analysis:\n{json.dumps(context, indent=2)[:6000]}"
         result = self.router.invoke(TaskType.DEEP_ANALYSIS, prompt, system=self.SYSTEM)
         try:
-            analysis = json.loads(result["content"])
+            analysis = parse_llm_json(result["content"])
         except json.JSONDecodeError:
             analysis = {"summary": result["content"]}
         return {

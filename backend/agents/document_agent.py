@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from backend.agents.json_utils import parse_llm_json
 from backend.router.model_router import ModelRouter, TaskType
 
 
@@ -21,7 +22,7 @@ class DocumentAgent:
         prompt = f"Source: {source}\n\nDocument text:\n{raw_text[:8000]}"
         result = self.router.invoke(TaskType.DOCUMENT_PARSE, prompt, system=self.SYSTEM)
         try:
-            parsed = json.loads(result["content"])
+            parsed = parse_llm_json(result["content"])
         except json.JSONDecodeError:
             parsed = {"raw": result["content"], "parse_error": True}
         return {

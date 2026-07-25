@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from backend.agents.json_utils import parse_llm_json
 from backend.router.model_router import ModelRouter, TaskType
 
 
@@ -28,7 +29,7 @@ class RecommendationAgent:
             estimated_savings_usd=savings,
         )
         try:
-            plan = json.loads(result["content"])
+            plan = parse_llm_json(result["content"])
         except json.JSONDecodeError:
             plan = {"action_plan": [], "raw": result["content"]}
         return {

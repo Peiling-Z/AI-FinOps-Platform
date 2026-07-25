@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from backend.agents.json_utils import parse_llm_json
 from backend.router.model_router import ModelRouter, TaskType
 
 
@@ -22,7 +23,7 @@ class ComplianceAgent:
         prompt = f"Review for compliance:\n{json.dumps(transactions, indent=2)[:6000]}"
         result = self.router.invoke(TaskType.COMPLIANCE_CHECK, prompt, system=self.SYSTEM)
         try:
-            compliance = json.loads(result["content"])
+            compliance = parse_llm_json(result["content"])
         except json.JSONDecodeError:
             compliance = {"flags": [], "raw": result["content"]}
         return {
