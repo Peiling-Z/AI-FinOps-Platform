@@ -6,13 +6,17 @@ import json
 from typing import Any
 
 from backend.agents.json_utils import parse_llm_json
+from backend.agents.savings import savings_from_content
 from backend.router.model_router import ModelRouter, TaskType
 
 
 class OptimizationAgent:
+    """Sole source of truth for how much money the pipeline claims to find."""
+
     SYSTEM = (
         "You are a personal finance optimizer. Identify concrete savings opportunities "
-        "with estimated annual savings in USD. Return valid JSON with an 'actions' list."
+        "with estimated annual savings in USD. Return valid JSON with an 'actions' list, "
+        "where each action includes an 'estimated_annual_savings_usd' number."
     )
 
     def __init__(self, router: ModelRouter | None = None) -> None:
@@ -20,12 +24,11 @@ class OptimizationAgent:
 
     def run(self, spending_profile: dict[str, Any]) -> dict[str, Any]:
         prompt = f"Spending profile:\n{json.dumps(spending_profile, indent=2)[:6000]}"
-        estimated_savings = float(spending_profile.get("optimization_potential_usd", 420.0))
         result = self.router.invoke(
             TaskType.RECOMMENDATION,
             prompt,
             system=self.SYSTEM,
-            estimated_savings_usd=estimated_savings,
+            savings_extractor=savings_from_content,
         )
         try:
             recommendations = parse_llm_json(result["content"])
