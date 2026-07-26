@@ -11,7 +11,7 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from backend.agents.orchestrator import run_pipeline
+from backend.agents.orchestrator import extract_transactions, run_pipeline
 from backend.config import get_settings
 from backend.evaluation.agent_eval import run_eval_suite
 from backend.ingestion.csv_loader import load_csv_string
@@ -58,12 +58,15 @@ class AnalyzeRequest(BaseModel):
 
 class AnalyzeResponse(BaseModel):
     status: str
+    document: dict[str, Any] = Field(default_factory=dict)
+    transactions: list[dict[str, Any]] = Field(default_factory=list)
     recommendation: dict[str, Any]
     analysis: dict[str, Any]
     optimization: dict[str, Any]
     compliance: dict[str, Any]
     cost_summary: dict[str, Any]
     errors: list[str]
+    pipeline_run_id: str | None = None
 
 
 @app.get("/health")
@@ -115,14 +118,18 @@ def reset_costs() -> dict[str, str]:
 @app.post("/analyze", response_model=AnalyzeResponse)
 def analyze(request: AnalyzeRequest) -> AnalyzeResponse:
     state = run_pipeline(request.text, source=request.source, router=get_shared_router())
+    document = state.get("document_result", {})
     return AnalyzeResponse(
         status="completed" if not state.get("errors") else "completed_with_errors",
+        document=document,
+        transactions=extract_transactions(document),
         recommendation=state.get("recommendation_result", {}),
         analysis=state.get("analysis_result", {}),
         optimization=state.get("optimization_result", {}),
         compliance=state.get("compliance_result", {}),
         cost_summary=state.get("cost_summary", {}),
         errors=state.get("errors", []),
+        pipeline_run_id=state.get("pipeline_run_id"),
     )
 
 

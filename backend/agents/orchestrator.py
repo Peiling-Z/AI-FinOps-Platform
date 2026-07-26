@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import operator
-from typing import Annotated, Any, TypedDict
+from typing import Annotated, Any, Literal, TypedDict
 
 from langgraph.graph import END, StateGraph
 
@@ -30,14 +30,28 @@ class FinOpsState(TypedDict):
     cost_summary: dict[str, Any]
 
 
-def _extract_transactions(document_result: dict[str, Any]) -> list[dict[str, Any]]:
-    extracted = document_result.get("extracted", {})
-    txs = extracted.get("transactions", [])
-    if txs:
-        return txs
-    return [
-        {"date": "2026-05-01", "merchant": "Sample Merchant", "amount": -50.0, "category": "general"},
-    ]
+def extract_transactions(document_result: dict[str, Any]) -> list[dict[str, Any]]:
+    """Pull transactions from document agent output.
+
+    Returns an empty list when parsing failed or the model omitted transactions.
+    Callers must treat empty as a hard stop — never invent Sample Merchant data.
+    """
+    extracted = document_result.get("extracted") or {}
+    if not isinstance(extracted, dict):
+        return []
+    txs = extracted.get("transactions") or []
+    if not isinstance(txs, list):
+        return []
+    return [tx for tx in txs if isinstance(tx, dict)]
+
+
+def _document_extract_error(document_result: dict[str, Any]) -> str:
+    if not document_result:
+        return "document_agent: document step did not produce a result"
+    extracted = document_result.get("extracted") or {}
+    if isinstance(extracted, dict) and extracted.get("parse_error"):
+        return "document_agent: failed to parse LLM output as JSON with transactions"
+    return "document_agent: no transactions extracted from input"
 
 
 def build_finops_graph(router: ModelRouter | None = None) -> StateGraph:
@@ -57,13 +71,26 @@ def build_finops_graph(router: ModelRouter | None = None) -> StateGraph:
     def document_node(state: FinOpsState) -> dict[str, Any]:
         try:
             result = document_agent.run(state["raw_input"], source=state.get("source", "text"))
-            return {"document_result": result}
+            update: dict[str, Any] = {"document_result": result}
+            if not extract_transactions(result):
+                update["errors"] = [_document_extract_error(result)]
+            return update
         except Exception as exc:  # noqa: BLE001 — surface agent failures in state
             return {"errors": [f"document_agent: {exc}"]}
 
+    def abort_node(state: FinOpsState) -> dict[str, Any]:
+        """Stop before expensive agents when document extraction failed."""
+        errors: list[str] = []
+        if not state.get("errors"):
+            errors = [_document_extract_error(state.get("document_result", {}))]
+        return {
+            "errors": errors,
+            "cost_summary": shared_router.summary(),
+        }
+
     def analysis_node(state: FinOpsState) -> dict[str, Any]:
         try:
-            txs = _extract_transactions(state.get("document_result", {}))
+            txs = extract_transactions(state.get("document_result", {}))
             result = analysis_agent.run(txs)
             deep = analysis_agent.deep_analysis({"transactions": txs, "analysis": result["analysis"]})
             result["deep_analysis"] = deep["analysis"]
@@ -74,7 +101,7 @@ def build_finops_graph(router: ModelRouter | None = None) -> StateGraph:
     def optimization_node(state: FinOpsState) -> dict[str, Any]:
         try:
             profile = {
-                "transactions": _extract_transactions(state.get("document_result", {})),
+                "transactions": extract_transactions(state.get("document_result", {})),
                 "analysis": state.get("analysis_result", {}).get("analysis", {}),
             }
             result = optimization_agent.run(profile)
@@ -84,7 +111,7 @@ def build_finops_graph(router: ModelRouter | None = None) -> StateGraph:
 
     def compliance_node(state: FinOpsState) -> dict[str, Any]:
         try:
-            txs = _extract_transactions(state.get("document_result", {}))
+            txs = extract_transactions(state.get("document_result", {}))
             result = compliance_agent.run(txs)
             return {"compliance_result": result}
         except Exception as exc:
@@ -106,8 +133,14 @@ def build_finops_graph(router: ModelRouter | None = None) -> StateGraph:
         except Exception as exc:
             return {"errors": [f"recommendation_agent: {exc}"]}
 
+    def route_after_document(state: FinOpsState) -> Literal["analysis", "abort"]:
+        if extract_transactions(state.get("document_result", {})):
+            return "analysis"
+        return "abort"
+
     graph.add_node("ingest", ingest_node)
     graph.add_node("document", document_node)
+    graph.add_node("abort", abort_node)
     graph.add_node("analysis", analysis_node)
     graph.add_node("optimization", optimization_node)
     graph.add_node("compliance", compliance_node)
@@ -115,7 +148,12 @@ def build_finops_graph(router: ModelRouter | None = None) -> StateGraph:
 
     graph.set_entry_point("ingest")
     graph.add_edge("ingest", "document")
-    graph.add_edge("document", "analysis")
+    graph.add_conditional_edges(
+        "document",
+        route_after_document,
+        {"analysis": "analysis", "abort": "abort"},
+    )
+    graph.add_edge("abort", END)
     graph.add_edge("analysis", "optimization")
     graph.add_edge("optimization", "compliance")
     graph.add_edge("compliance", "recommendation")
