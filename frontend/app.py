@@ -30,6 +30,12 @@ with tab_analyze:
             data = resp.json()
             st.session_state["last_cost_summary"] = data.get("cost_summary", {})
             st.success(f"Status: {data['status']}")
+            if data.get("errors"):
+                st.warning("Pipeline errors:\n- " + "\n- ".join(data["errors"]))
+            st.caption(
+                f"{len(data.get('transactions', []))} transactions extracted"
+                + (f" · run `{data['pipeline_run_id']}`" if data.get("pipeline_run_id") else "")
+            )
             col1, col2 = st.columns(2)
             with col1:
                 st.subheader("Recommendation")
